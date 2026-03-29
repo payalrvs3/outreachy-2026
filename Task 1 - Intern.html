@@ -31,14 +31,14 @@
         </script>
         <script>
             let output = data.map(item => {
-		const date = new Date(item.creation_date + "T00:00:00");
-		const formatted = date.toLocaleDateString("en-US", {
-		year: "numeric", month: "long", day: "numeric"
-		});
-		return `Article "${item.title}" (Page ID ${item.page_id}) was created at ${formatted}.`;
-		}).join("<br>");
+				const date = new Date(item.creation_date + "T00:00:00");
+				const formatted = date.toLocaleDateString("en-US", {
+				year: "numeric", month: "long", day: "numeric"
+				});
+				return `Article "${item.title}" (Page ID ${item.page_id}) was created at ${formatted}.`;
+			}).join("<br>");
 
-		document.getElementById("results").innerHTML = output;
+			document.getElementById("results").innerHTML = output;
 
             document.getElementById("code").innerText = document.getElementById("task_id").text;
         </script>
