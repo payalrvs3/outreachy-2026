@@ -27,4 +27,4 @@ Features shown:
 - Per-contest configuration: enable/disable Wikidata scoring, 
   exclude bot edits, set points per edit type
 
-**Live preview:** 
+**Live preview:** [Wish #8 — Wikidata support for WikiScore](https://payalrvs3.github.io/outreachy-2026/Prototype/wishlist8_prototype.html)
