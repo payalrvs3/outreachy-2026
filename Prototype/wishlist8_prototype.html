@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WikiScore — Wikidata Support Prototype (Wish #8)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#ffffff; --bg2:#f5f5f0; --bg3:#eeede8;
+      --tx:#1a1a18; --tx2:#5f5e5a; --tx3:#888780;
+      --bd:rgba(0,0,0,0.12); --bd2:rgba(0,0,0,0.22);
+      --r:8px; --rl:12px;
+      --pu50:#EEEDFE; --pu200:#AFA9EC; --pu600:#534AB7; --pu800:#3C3489;
+      --bl50:#E6F1FB; --bl200:#85B7EB; --bl400:#378ADD; --bl600:#185FA5;
+      --te50:#E1F5EE; --te600:#0F6E56;
+      --am600:#854F0B; --gr400:#888780; --co600:#993C1D;
+      --gn50:#EAF3DE; --gn600:#3B6D11;
+    }
+    @media(prefers-color-scheme:dark){
+      :root{ --bg:#1e1e1c; --bg2:#252523; --bg3:#161614; --tx:#e8e6dc; --tx2:#9c9a92; --tx3:#6b6a64; --bd:rgba(255,255,255,0.10); --bd2:rgba(255,255,255,0.18); }
+    }
+    body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg3); color:var(--tx); font-size:14px; line-height:1.5; }
+    .banner{ background:var(--bg2); border-bottom:0.5px solid var(--bd); padding:7px 24px; font-size:12px; color:var(--tx2); text-align:center; }
+    .banner a{ color:var(--pu600); text-decoration:none; }
+    nav{ background:var(--bg); border-bottom:0.5px solid var(--bd); padding:10px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .nav-brand{ font-size:15px; font-weight:500; }
+    .nav-links{ display:flex; gap:20px; font-size:13px; color:var(--tx2); }
+    .nav-links span{ cursor:pointer; padding:4px 0; border-bottom:2px solid transparent; }
+    .nav-links span.active{ color:var(--tx); border-bottom:2px solid var(--pu600); }
+    .nav-links span:hover{ color:var(--tx); }
+    .nav-user{ font-size:13px; color:var(--tx2); }
+    .page{ padding:20px 24px; max-width:1020px; margin:0 auto; }
+    .contest-header{ background:var(--bg); border:0.5px solid var(--bd); border-radius:var(--rl); padding:16px 20px; margin-bottom:16px; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+    .contest-title{ font-size:17px; font-weight:500; margin-bottom:4px; }
+    .contest-meta{ font-size:12px; color:var(--tx2); line-height:1.8; }
+    .badge{ display:inline-block; font-size:11px; font-weight:500; padding:3px 9px; border-radius:var(--r); margin-left:4px; }
+    .b-active{ background:var(--te50); color:var(--te600); }
+    .b-wiki{ background:var(--bl50); color:var(--bl600); }
+    .b-wd{ background:var(--pu50); color:var(--pu600); }
+    .b-new{ background:var(--gn50); color:var(--gn600); font-size:10px; padding:2px 6px; }
+    .metrics{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+    @media(max-width:680px){ .metrics{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    .metric{ background:var(--bg2); border-radius:var(--r); padding:13px 15px; }
+    .metric-label{ font-size:11px; color:var(--tx2); margin-bottom:5px; }
+    .metric-value{ font-size:20px; font-weight:500; }
+    .metric-sub{ font-size:11px; color:var(--tx3); margin-top:2px; }
+    .tabs{ display:flex; background:var(--bg); border:0.5px solid var(--bd); border-radius:var(--rl) var(--rl) 0 0; border-bottom:none; overflow:hidden; }
+    .tab{ padding:10px 18px; font-size:13px; cursor:pointer; color:var(--tx2); border-bottom:2px solid transparent; border-right:0.5px solid var(--bd); background:none; transition:color .15s; user-select:none; }
+    .tab:last-child{ border-right:none; }
+    .tab:hover{ color:var(--tx); }
+    .tab.active{ color:var(--tx); font-weight:500; border-bottom:2px solid var(--pu600); }
+    .tab-content{ background:var(--bg); border:0.5px solid var(--bd); border-radius:0 0 var(--rl) var(--rl); overflow:hidden; }
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    thead{ background:var(--bg2); }
+    th{ padding:9px 14px; text-align:left; font-weight:500; color:var(--tx2); font-size:12px; border-bottom:0.5px solid var(--bd); white-space:nowrap; }
+    td{ padding:9px 14px; border-bottom:0.5px solid var(--bd); }
+    tr:last-child td{ border-bottom:none; }
+    tr:hover td{ background:var(--bg2); }
+    .user-cell{ display:flex; align-items:center; gap:9px; }
+    .avatar{ width:26px; height:26px; border-radius:50%; background:var(--bl50); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:500; color:var(--bl600); flex-shrink:0; }
+    .avatar.wd{ background:var(--pu50); color:var(--pu600); }
+    .pts-wiki{ color:var(--bl600); font-weight:500; }
+    .pts-wd{ color:var(--pu600); font-weight:500; }
+    .pts-total{ font-weight:500; }
+    .rank{ font-weight:500; color:var(--tx3); font-size:12px; }
+    .rank-1{ color:var(--am600); }
+    .rank-2{ color:var(--gr400); }
+    .rank-3{ color:var(--co600); }
+    .bar-wrap{ width:88px; height:8px; background:var(--bg2); border-radius:4px; overflow:hidden; display:inline-flex; vertical-align:middle; }
+    .bar-wiki{ height:100%; background:var(--bl200); }
+    .bar-wd{ height:100%; background:var(--pu200); }
+    .wb-badge{ font-size:11px; padding:2px 6px; border-radius:var(--r); background:var(--pu50); color:var(--pu600); font-family:monospace; white-space:nowrap; }
+    .panel{ padding:20px 24px; }
+    .section{ margin-bottom:28px; }
+    .section-label{ font-size:13px; font-weight:500; margin-bottom:12px; }
+    .info-box{ background:var(--pu50); border:0.5px solid var(--pu200); border-radius:var(--r); padding:11px 14px; font-size:13px; color:var(--pu800); margin-bottom:20px; line-height:1.7; }
+    .info-box code{ font-family:monospace; font-size:11px; background:var(--pu200); padding:1px 4px; border-radius:3px; }
+    .formula-box{ background:var(--bg2); border:0.5px solid var(--bd); border-radius:var(--r); padding:14px 18px; font-size:13px; font-family:monospace; color:var(--tx2); margin-bottom:20px; line-height:2.2; }
+    .toggle-row{ display:flex; align-items:flex-start; justify-content:space-between; padding:12px 16px; background:var(--bg2); border-radius:var(--r); margin-bottom:8px; gap:16px; }
+    .toggle-text .lbl{ font-size:13px; font-weight:500; }
+    .toggle-text .desc{ font-size:12px; color:var(--tx2); margin-top:3px; line-height:1.5; }
+    .toggle-text .desc code{ font-family:monospace; font-size:11px; }
+    .toggle-track{ position:relative; width:36px; height:20px; background:var(--bd2); border-radius:10px; transition:background .2s; cursor:pointer; flex-shrink:0; margin-top:2px; }
+    .toggle-track.on{ background:var(--pu600); }
+    .toggle-thumb{ position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; transition:transform .2s; pointer-events:none; }
+    .toggle-track.on .toggle-thumb{ transform:translateX(16px); }
+    .pts-table th{ background:var(--bg2); padding:8px 12px; font-size:12px; }
+    .pts-table td{ padding:9px 12px; }
+    .pts-input{ width:62px; padding:5px 8px; font-size:13px; border-radius:var(--r); border:0.5px solid var(--bd2); background:var(--bg); color:var(--tx); text-align:center; }
+    .btn-save{ margin-top:16px; padding:8px 20px; font-size:13px; font-weight:500; background:var(--pu600); color:#fff; border:none; border-radius:var(--r); cursor:pointer; transition:background .15s; }
+    .btn-save:hover{ background:var(--pu800); }
+    .manage-card{ background:var(--bg); border:0.5px solid var(--bd); border-radius:var(--rl); padding:20px 24px; }
+    .manage-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media(max-width:600px){ .manage-grid{ grid-template-columns:1fr; } }
+    .form-field label{ display:block; font-size:12px; color:var(--tx2); margin-bottom:4px; }
+    .form-field input{ width:100%; padding:7px 10px; font-size:13px; border:0.5px solid var(--bd2); border-radius:var(--r); background:var(--bg); color:var(--tx); }
+    .form-field.full{ grid-column:1/-1; }
+    .form-divider{ grid-column:1/-1; border:none; border-top:0.5px solid var(--bd); margin:4px 0; }
+    .form-section-title{ grid-column:1/-1; font-size:12px; font-weight:500; color:var(--pu600); padding:6px 0 0; display:flex; align-items:center; gap:8px; }
+  </style>
+</head>
+<body>
+
+<div class="banner">
+  Prototype — Wish #8: Wikidata support for WikiScore &nbsp;·&nbsp;
+  Outreachy 2025 · payalrvs3 &nbsp;·&nbsp;
+  <a href="https://phabricator.wikimedia.org/T418286">T418286</a>
+</div>
+
+<nav>
+  <span class="nav-brand">WikiScore</span>
+  <div class="nav-links">
+    <span class="active" id="nav-contest" onclick="showScreen('contest',this)">Contest</span>
+    <span id="nav-manage" onclick="showScreen('manage',this)">Manage</span>
+  </div>
+  <span class="nav-user">payalrvs3</span>
+</nav>
+
+<div class="page">
+
+  <!-- CONTEST SCREEN -->
+  <div id="screen-contest">
+    <div class="contest-header">
+      <div>
+        <div class="contest-title">Wikimaratona Indígena 2025 <span class="badge b-active">active</span></div>
+        <div class="contest-meta">
+          name_id: wikimaratona-2025 &nbsp;·&nbsp; 1 Mar – 30 Apr 2025 &nbsp;·&nbsp; Group: WikiMovimento Brasil<br>
+          bytes_per_points: 3000 &nbsp;·&nbsp; max_bytes_per_article: 90000 &nbsp;·&nbsp; api_endpoint: pt.wikipedia.org/w/api.php
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="badge b-wiki">pt.wikipedia.org</span>
+        <span class="badge b-wd">wikidata.org</span>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Total points</div>
+        <div class="metric-value" id="m-total">—</div>
+        <div class="metric-sub">bytes_pts + wd_pts</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Wikipedia bytes pts</div>
+        <div class="metric-value" style="color:var(--bl600)" id="m-wiki-pts">—</div>
+        <div class="metric-sub" id="m-wiki-bytes">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Wikidata pts</div>
+        <div class="metric-value" style="color:var(--pu600)" id="m-wd-pts">—</div>
+        <div class="metric-sub" id="m-wd-edits">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Wikipedia edits</div>
+        <div class="metric-value">284</div>
+        <div class="metric-sub">valid: 201</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Last synced</div>
+        <div class="metric-value" style="font-size:14px">4 min ago</div>
+        <div class="metric-sub">cron · 10 min</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('counter',this)">Counter</div>
+      <div class="tab" onclick="showTab('wdedits',this)">Wikidata edits <span class="badge b-new">new</span></div>
+      <div class="tab" onclick="showTab('wdsettings',this)">Wikidata settings <span class="badge b-new">new</span></div>
+    </div>
+
+    <div class="tab-content">
+
+      <div id="tab-counter">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:32px">#</th>
+              <th>Participant</th>
+              <th title="FLOOR(SUM(real_bytes per article, capped at max_bytes_per_article) / bytes_per_points)">Bytes pts</th>
+              <th>Pictures pts</th>
+              <th style="color:var(--pu600)">Wikidata pts <span class="badge b-new">new</span></th>
+              <th>Total pts</th>
+              <th>Breakdown</th>
+            </tr>
+          </thead>
+          <tbody id="counter-body"></tbody>
+        </table>
+      </div>
+
+      <div id="tab-wdedits" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th>Participant</th>
+              <th>Wikidata item</th>
+              <th>Edit comment (auto-generated by Wikibase)</th>
+              <th>Parsed action</th>
+              <th>Points</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="wdedits-body"></tbody>
+        </table>
+      </div>
+
+      <div id="tab-wdsettings" style="display:none">
+        <div class="panel">
+          <div class="info-box">
+            Wikidata edits are fetched via <code>wikidata.org/w/api.php</code> using
+            <code>action=query&amp;list=usercontribs&amp;ucstart={contest.start_time}&amp;ucend={contest.end_time}</code>
+            for each <code>Participant.user</code> in this contest.
+            The Wikibase edit type is parsed from the auto-generated comment
+            (e.g. <code>/* wbsetclaim-create:2||1 */</code>) using a regex.
+            Points are stored in a new <code>WikidataEdit</code> model and summed
+            alongside <code>bytes_points</code> in the counter query.
+          </div>
+
+          <div class="section">
+            <div class="section-label">Updated scoring formula</div>
+            <div class="formula-box">
+              <span style="color:var(--bl600)">bytes_points</span> = FLOOR(SUM(real_bytes per article, capped) / bytes_per_points)<br>
+              <span style="color:var(--bl600)">pictures_points</span> = FLOOR(SUM(pictures) / pictures_per_points)<br>
+              <span style="color:var(--pu600)">wikidata_points</span> = SUM(WikidataEdit.points) per participant &nbsp;<span class="badge b-new">new</span><br>
+              <strong>total_points</strong> = bytes_points + pictures_points + <span style="color:var(--pu600)">wikidata_points</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Features</div>
+            <div class="toggle-row">
+              <div class="toggle-text">
+                <div class="lbl">Enable Wikidata scoring</div>
+                <div class="desc">Adds <code>wikidata_enabled</code> boolean to <code>Contest</code> model. When on, the cron update command also queries <code>wikidata.org</code> for each participant's edits.</div>
+              </div>
+              <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-text">
+                <div class="lbl">Exclude bot edits</div>
+                <div class="desc">Skips edits where the Wikidata <code>usercontribs</code> API returns a <code>bot</code> tag. Stored as <code>wikidata_exclude_bots</code> on <code>Contest</code>.</div>
+              </div>
+              <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-text">
+                <div class="lbl">Only count edits linked to contest articles</div>
+                <div class="desc">If on, only scores Wikidata edits to items with a sitelink to an article in this contest's <code>Article</code> list. If off, any Wikidata edit by a participant counts.</div>
+              </div>
+              <div class="toggle-track" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-label">Points per Wikibase action</div>
+            <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">
+              Stored in a new <code style="font-family:monospace;font-size:11px">WikidataPointRule</code> model
+              (contest → action_type → points). One row per rule per contest.
+            </div>
+            <table class="pts-table">
+              <thead>
+                <tr>
+                  <th>Edit type</th>
+                  <th>Wikibase action (parsed from comment)</th>
+                  <th>Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Create new item</td><td><span class="wb-badge">wbcreate-new</span></td><td><input class="pts-input" type="number" value="5" min="0"></td></tr>
+                <tr><td>Add statement</td><td><span class="wb-badge">wbsetclaim-create</span></td><td><input class="pts-input" type="number" value="3" min="0"></td></tr>
+                <tr><td>Add reference</td><td><span class="wb-badge">wbsetreference-add</span></td><td><input class="pts-input" type="number" value="2" min="0"></td></tr>
+                <tr><td>Add label / description</td><td><span class="wb-badge">wbsetlabel-add</span> / <span class="wb-badge">wbsetdescription-add</span></td><td><input class="pts-input" type="number" value="1" min="0"></td></tr>
+                <tr><td>Add sitelink</td><td><span class="wb-badge">wbsetsitelink-add</span></td><td><input class="pts-input" type="number" value="2" min="0"></td></tr>
+                <tr><td>Edit statement</td><td><span class="wb-badge">wbsetclaim-update</span></td><td><input class="pts-input" type="number" value="1" min="0"></td></tr>
+                <tr><td>Remove statement</td><td><span class="wb-badge">wbremoveclaims</span></td><td><input class="pts-input" type="number" value="0" min="0"></td></tr>
+              </tbody>
+            </table>
+            <button class="btn-save" onclick="saveBtn(this)">Save rules</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MANAGE SCREEN -->
+  <div id="screen-manage" style="display:none">
+    <div class="manage-card">
+      <div style="font-size:16px;font-weight:500;margin-bottom:4px">Create / edit contest</div>
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:20px">Fields marked <span class="badge b-new">new</span> are added by Wish #8 to the existing manage form</div>
+      <div class="manage-grid">
+        <div class="form-field"><label>name_id</label><input type="text" value="wikimaratona-2025"></div>
+        <div class="form-field"><label>name</label><input type="text" value="Wikimaratona Indígena 2025"></div>
+        <div class="form-field"><label>start_time</label><input type="datetime-local" value="2025-03-01T00:00"></div>
+        <div class="form-field"><label>end_time</label><input type="datetime-local" value="2025-04-30T23:59"></div>
+        <div class="form-field"><label>endpoint</label><input type="text" value="https://pt.wikipedia.org"></div>
+        <div class="form-field"><label>api_endpoint</label><input type="text" value="https://pt.wikipedia.org/w/api.php"></div>
+        <div class="form-field"><label>bytes_per_points</label><input type="number" value="3000"></div>
+        <div class="form-field"><label>max_bytes_per_article</label><input type="number" value="90000"></div>
+
+        <hr class="form-divider">
+        <div class="form-section-title">Wikidata scoring <span class="badge b-new">new fields on Contest model</span></div>
+
+        <div class="form-field full" style="margin-top:4px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--tx)">
+            <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            wikidata_enabled — count Wikidata edits for this contest
+          </label>
+        </div>
+        <div class="form-field full">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--tx)">
+            <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            wikidata_exclude_bots — skip edits tagged as bot
+          </label>
+        </div>
+        <div class="form-field full">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--tx)">
+            <div class="toggle-track" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+            wikidata_linked_only — only count edits to items linked to contest articles
+          </label>
+        </div>
+
+        <div class="form-section-title" style="margin-top:4px">WikidataPointRule <span class="badge b-new">new model</span></div>
+        <div class="form-field full">
+          <table class="pts-table" style="font-size:12px">
+            <thead><tr><th>Wikibase action</th><th>Points</th></tr></thead>
+            <tbody>
+              <tr><td><span class="wb-badge">wbcreate-new</span></td><td><input class="pts-input" type="number" value="5" min="0" style="width:54px"></td></tr>
+              <tr><td><span class="wb-badge">wbsetclaim-create</span></td><td><input class="pts-input" type="number" value="3" min="0" style="width:54px"></td></tr>
+              <tr><td><span class="wb-badge">wbsetreference-add</span></td><td><input class="pts-input" type="number" value="2" min="0" style="width:54px"></td></tr>
+              <tr><td><span class="wb-badge">wbsetlabel-add</span></td><td><input class="pts-input" type="number" value="1" min="0" style="width:54px"></td></tr>
+              <tr><td><span class="wb-badge">wbsetsitelink-add</span></td><td><input class="pts-input" type="number" value="2" min="0" style="width:54px"></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="form-field full"><button class="btn-save" onclick="saveBtn(this)">Save contest</button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BPP = 3000;
+const MAX_BYTES = 90000;
+
+const participants = [
+  {name:"SôniaBR",      i:"SB", bytes:87000, pic:2, wd:18},
+  {name:"KaingángEdit", i:"KE", bytes:72000, pic:1, wd:14},
+  {name:"Potiguara21",  i:"PT", bytes:63000, pic:0, wd:11},
+  {name:"XakriabáWiki", i:"XW", bytes:54000, pic:3, wd:9},
+  {name:"BaniwaBrasil", i:"BB", bytes:45000, pic:1, wd:16},
+  {name:"Piyãko2025",   i:"PY", bytes:39000, pic:0, wd:7},
+  {name:"GuajajaraW",   i:"GW", bytes:30000, pic:2, wd:5},
+  {name:"GakranEdit",   i:"GE", bytes:18000, pic:0, wd:12},
+];
+
+const wdEdits = [
+  {user:"SôniaBR",      item:"Q42522117", comment:"/* wbsetclaim-create:2||1 */ [[Property:P18]]", action:"wbsetclaim-create",  pts:3, ts:"2025-03-14 09:12"},
+  {user:"BaniwaBrasil", item:"Q21510484", comment:"/* wbcreate-new */",                             action:"wbcreate-new",       pts:5, ts:"2025-03-14 08:55"},
+  {user:"KaingángEdit", item:"Q42522117", comment:"/* wbsetreference-add:1| */ [[Property:P854]]",  action:"wbsetreference-add", pts:2, ts:"2025-03-14 08:40"},
+  {user:"GakranEdit",   item:"Q65792310", comment:"/* wbsetlabel-add:1|pt */",                      action:"wbsetlabel-add",     pts:1, ts:"2025-03-14 08:22"},
+  {user:"XakriabáWiki", item:"Q21510484", comment:"/* wbsetsitelink-add:1| */ ptwiki",              action:"wbsetsitelink-add",  pts:2, ts:"2025-03-14 08:10"},
+  {user:"SôniaBR",      item:"Q99021345", comment:"/* wbsetclaim-create:2||1 */ [[Property:P21]]",  action:"wbsetclaim-create",  pts:3, ts:"2025-03-13 22:44"},
+  {user:"Potiguara21",  item:"Q65792310", comment:"/* wbsetclaim-update:1||1 */",                   action:"wbsetclaim-update",  pts:1, ts:"2025-03-13 21:30"},
+  {user:"BaniwaBrasil", item:"Q42522117", comment:"/* wbsetreference-add:1| */",                    action:"wbsetreference-add", pts:2, ts:"2025-03-13 20:15"},
+];
+
+function bpts(p){ return Math.floor(Math.min(p.bytes, MAX_BYTES) / BPP); }
+function total(p){ return bpts(p) + p.pic + p.wd; }
+
+function calcMetrics(){
+  let wikiSum=0, wdSum=0, bytesSum=0;
+  participants.forEach(p=>{ wikiSum+=bpts(p)+p.pic; wdSum+=p.wd; bytesSum+=p.bytes; });
+  document.getElementById('m-wiki-pts').textContent  = wikiSum;
+  document.getElementById('m-wiki-bytes').textContent= Math.round(bytesSum/1000)+'k valid bytes';
+  document.getElementById('m-wd-pts').textContent    = wdSum;
+  document.getElementById('m-wd-edits').textContent  = wdEdits.length+' wd edits';
+  document.getElementById('m-total').textContent     = wikiSum+wdSum;
+}
+
+function renderCounter(){
+  const sorted=[...participants].sort((a,b)=>total(b)-total(a));
+  const mx=total(sorted[0]);
+  document.getElementById('counter-body').innerHTML=sorted.map((p,i)=>{
+    const bp=bpts(p), tot=total(p);
+    const wPct=Math.round((bp/mx)*82), dPct=Math.round((p.wd/mx)*82);
+    const rc=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
+    return `<tr>
+      <td class="rank ${rc}">${i+1}</td>
+      <td><div class="user-cell"><div class="avatar">${p.i}</div>${p.name}</div></td>
+      <td class="pts-wiki">${bp}</td>
+      <td style="color:var(--tx2)">${p.pic}</td>
+      <td class="pts-wd">${p.wd}</td>
+      <td class="pts-total">${tot}</td>
+      <td><div class="bar-wrap"><div class="bar-wiki" style="width:${wPct}px"></div><div class="bar-wd" style="width:${dPct}px"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderWdEdits(){
+  document.getElementById('wdedits-body').innerHTML=wdEdits.map(e=>`<tr>
+    <td><div class="user-cell"><div class="avatar wd">${e.user.slice(0,2).toUpperCase()}</div>${e.user}</div></td>
+    <td><a href="https://www.wikidata.org/wiki/${e.item}" style="color:var(--pu600);text-decoration:none;font-family:monospace;font-size:12px">${e.item}</a></td>
+    <td style="font-size:12px;color:var(--tx2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.comment}">${e.comment}</td>
+    <td><span class="wb-badge">${e.action}</span></td>
+    <td style="font-weight:500;color:var(--pu600)">+${e.pts}</td>
+    <td style="font-size:12px;color:var(--tx3)">${e.ts}</td>
+  </tr>`).join('');
+}
+
+function showTab(name,el){
+  document.querySelectorAll('.tab-content > div').forEach(d=>d.style.display='none');
+  document.getElementById('tab-'+name).style.display='block';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function showScreen(name,el){
+  document.getElementById('screen-contest').style.display=name==='contest'?'block':'none';
+  document.getElementById('screen-manage').style.display=name==='manage'?'block':'none';
+  document.querySelectorAll('.nav-links span').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function saveBtn(btn){
+  const orig=btn.textContent;
+  btn.textContent='Saved'; btn.style.background='var(--te600)';
+  setTimeout(()=>{ btn.textContent=orig; btn.style.background=''; },2000);
+}
+
+calcMetrics(); renderCounter(); renderWdEdits();
+</script>
+</body>
+</html>
