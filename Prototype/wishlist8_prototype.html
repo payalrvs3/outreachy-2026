@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WikiScore — Wikidata Support Prototype (Wish #8)</title>
+  <title>WikiScore - Wikidata Support Prototype (Wish #8)</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -103,7 +103,7 @@
 <body>
 
 <div class="banner">
-  Prototype — Wish #8: Wikidata support for WikiScore &nbsp;·&nbsp;
+  Prototype - Wish #8: Wikidata support for WikiScore &nbsp;·&nbsp;
   Outreachy 2025 · payalrvs3 &nbsp;·&nbsp;
   <a href="https://phabricator.wikimedia.org/T418286">T418286</a>
 </div>
@@ -167,6 +167,7 @@
       <div class="tab active" onclick="showTab('counter',this)">Counter</div>
       <div class="tab" onclick="showTab('wdedits',this)">Wikidata edits <span class="badge b-new">new</span></div>
       <div class="tab" onclick="showTab('wdsettings',this)">Wikidata settings <span class="badge b-new">new</span></div>
+      <div class="tab" onclick="showTab('liveapi',this)">Live API lookup <span class="badge b-new">new</span></div>
     </div>
 
     <div class="tab-content">
@@ -276,6 +277,55 @@
               </tbody>
             </table>
             <button class="btn-save" onclick="saveBtn(this)">Save rules</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-liveapi" style="display:none">
+        <div class="panel">
+          <div class="info-box">
+            This tab demonstrates the real <code>load_wikidata</code> management command logic running in the browser.
+            It calls <code>wikidata.org/w/api.php?action=query&amp;list=usercontribs</code> live,
+            parses Wikibase action types from edit comments using regex
+            <code>/\/\* ([\w-]+)(?::[^*]*)? \*\//</code>, and scores each edit
+            using the point rules defined in the settings tab.
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end">
+            <div>
+              <label style="display:block;font-size:12px;color:var(--tx2);margin-bottom:4px">Wikidata username</label>
+              <input id="api-username" type="text" placeholder="e.g. Ederporto" style="padding:7px 10px;font-size:13px;border:0.5px solid var(--bd2);border-radius:var(--r);background:var(--bg);color:var(--tx);width:200px">
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:var(--tx2);margin-bottom:4px">Start date</label>
+              <input id="api-start" type="date" value="2025-03-01" style="padding:7px 10px;font-size:13px;border:0.5px solid var(--bd2);border-radius:var(--r);background:var(--bg);color:var(--tx)">
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:var(--tx2);margin-bottom:4px">End date</label>
+              <input id="api-end" type="date" value="2025-04-30" style="padding:7px 10px;font-size:13px;border:0.5px solid var(--bd2);border-radius:var(--r);background:var(--bg);color:var(--tx)">
+            </div>
+            <button onclick="fetchLive()" style="padding:7px 18px;font-size:13px;font-weight:500;background:var(--pu600);color:#fff;border:none;border-radius:var(--r);cursor:pointer;height:36px">Fetch edits</button>
+          </div>
+
+          <div id="api-status" style="font-size:13px;color:var(--tx2);margin-bottom:12px;min-height:20px"></div>
+
+          <table id="api-table" style="display:none">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Edit comment (raw)</th>
+                <th>Parsed action</th>
+                <th>Points awarded</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="api-body"></tbody>
+          </table>
+
+          <div id="api-summary" style="display:none;margin-top:16px;padding:14px 18px;background:var(--bg2);border-radius:var(--r);font-size:13px">
+            <span style="color:var(--tx2)">Total Wikidata points for this period:</span>
+            <span id="api-total" style="font-size:20px;font-weight:500;color:var(--pu600);margin-left:10px">0</span>
+            <span style="font-size:12px;color:var(--tx3);margin-left:8px" id="api-editcount"></span>
           </div>
         </div>
       </div>
@@ -430,6 +480,118 @@ function saveBtn(btn){
 }
 
 calcMetrics(); renderCounter(); renderWdEdits();
+
+const POINT_RULES = {
+  'wbcreate-new': 5,
+  'wbsetclaim-create': 3,
+  'wbsetreference-add': 2,
+  'wbsetlabel-add': 1,
+  'wbsetdescription-add': 1,
+  'wbsetaliases-add': 1,
+  'wbsetsitelink-add': 2,
+  'wbsetclaim-update': 1,
+  'wbsetreference-set': 1,
+  'wbremoveclaims': 0,
+};
+
+const WB_ACTION_RE = /\/\* ([\w-]+)(?::[^*]*)? \*\//;
+
+function parseAction(comment) {
+  const m = WB_ACTION_RE.exec(comment || '');
+  return m ? m[1] : null;
+}
+
+async function fetchLive() {
+  const username = document.getElementById('api-username').value.trim();
+  const start    = document.getElementById('api-start').value;
+  const end      = document.getElementById('api-end').value;
+
+  if (!username) {
+    document.getElementById('api-status').textContent = 'Please enter a Wikidata username.';
+    return;
+  }
+
+  const status = document.getElementById('api-status');
+  const tbody  = document.getElementById('api-body');
+  const table  = document.getElementById('api-table');
+  const summary= document.getElementById('api-summary');
+
+  status.textContent = 'Fetching from wikidata.org/w/api.php...';
+  table.style.display  = 'none';
+  summary.style.display= 'none';
+  tbody.innerHTML = '';
+
+  const params = new URLSearchParams({
+    action:      'query',
+    format:      'json',
+    origin:      '*',
+    list:        'usercontribs',
+    ucuser:      username,
+    ucstart:     end   + 'T23:59:59Z',
+    ucend:       start + 'T00:00:00Z',
+    ucdir:       'older',
+    ucnamespace: '0',
+    ucprop:      'ids|title|timestamp|comment|tags|sizediff',
+    uclimit:     '50',
+  });
+
+  let allEdits = [];
+  let continueToken = null;
+  let pages = 0;
+
+  try {
+    do {
+      if (continueToken) params.set('uccontinue', continueToken);
+      const res  = await fetch(`https://www.wikidata.org/w/api.php?${params}`);
+      const data = await res.json();
+      const contribs = data?.query?.usercontribs || [];
+      allEdits = allEdits.concat(contribs);
+      continueToken = data?.continue?.uccontinue || null;
+      pages++;
+    } while (continueToken && pages < 3);
+  } catch(e) {
+    status.textContent = 'Error fetching from Wikidata API: ' + e.message;
+    return;
+  }
+
+  if (allEdits.length === 0) {
+    status.textContent = `No edits found for "${username}" in this period.`;
+    return;
+  }
+
+  let totalPts = 0;
+  let scored = 0;
+  const rows = allEdits.map(e => {
+    const action = parseAction(e.comment);
+    const pts    = action ? (POINT_RULES[action] ?? 0) : 0;
+    if (action) { totalPts += pts; scored++; }
+    const item = e.title || '';
+    const ts   = e.timestamp ? e.timestamp.replace('T',' ').replace('Z','') : '';
+    const commentShort = (e.comment || '').slice(0, 80);
+    const actionBadge  = action
+      ? `<span class="wb-badge">${action}</span>`
+      : `<span style="font-size:12px;color:var(--tx3)">—</span>`;
+    const ptsCell = action
+      ? `<span style="font-weight:500;color:var(--pu600)">+${pts}</span>`
+      : `<span style="color:var(--tx3)">0</span>`;
+    const botTag = (e.tags||[]).includes('bot')
+      ? `<span style="font-size:10px;background:#FCEBEB;color:#A32D2D;padding:1px 5px;border-radius:4px;margin-left:4px">bot</span>` : '';
+    return `<tr>
+      <td><a href="https://www.wikidata.org/wiki/${item}" target="_blank" style="color:var(--pu600);text-decoration:none;font-family:monospace;font-size:12px">${item}</a>${botTag}</td>
+      <td style="font-size:11px;color:var(--tx2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(e.comment||'').replace(/"/g,"'")}">${commentShort}</td>
+      <td>${actionBadge}</td>
+      <td>${ptsCell}</td>
+      <td style="font-size:12px;color:var(--tx3)">${ts}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join('');
+  table.style.display   = '';
+  summary.style.display = '';
+  document.getElementById('api-total').textContent = totalPts;
+  document.getElementById('api-editcount').textContent = `from ${scored} scored edits (${allEdits.length} total fetched)`;
+  status.textContent = `Fetched ${allEdits.length} edits for "${username}" · ${start} to ${end}`;
+}
 </script>
 </body>
 </html>
